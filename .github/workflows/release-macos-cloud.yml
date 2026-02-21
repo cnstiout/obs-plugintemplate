@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-15
+    runs-on: macos-latest
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
@@ -35,9 +35,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! brew list opencv >/dev/null 2>&1; then
-            brew install opencv pkg-config
+          if ! brew list cmake >/dev/null 2>&1; then
+            brew install cmake
           fi
+          if ! brew list opencv >/dev/null 2>&1; then
+            brew install opencv
+          fi
+
+      - name: Toolchain Versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          cmake --version
+          brew --version
+          brew list --versions opencv
 
       - name: Configure CMake (macOS)
         shell: bash
@@ -55,6 +68,12 @@ jobs:
       - name: Install
         run: cmake --install build_macos --config RelWithDebInfo --prefix dist_macos
 
+      - name: Inspect Install Tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist_macos -maxdepth 5 -print
+
       - name: Package Assets
         shell: bash
         run: |
@@ -64,20 +83,16 @@ jobs:
           OUT_DIR="release-assets"
           mkdir -p "$OUT_DIR"
 
-          PLUGIN_PATH="$(find dist_macos -maxdepth 1 -type d -name '*.plugin' | head -n 1)"
+          PLUGIN_PATH="$(find dist_macos -type d -name '*.plugin' | head -n 1)"
           if [[ -z "${PLUGIN_PATH:-}" ]]; then
             echo "No .plugin bundle found under dist_macos"
-            find dist_macos -maxdepth 3 -print || true
+            find dist_macos -maxdepth 8 -print || true
             exit 1
           fi
 
-          PLUGIN_NAME="$(basename "$PLUGIN_PATH")"
-          (
-            cd dist_macos
-            zip -qry "../$OUT_DIR/obs-face-emotion-filter-${SAFE_TAG}-macos-arm64-plugin.zip" "$PLUGIN_NAME"
-          )
+          ditto -c -k --keepParent "$PLUGIN_PATH" "$OUT_DIR/obs-face-emotion-filter-${SAFE_TAG}-macos-arm64-plugin.zip"
 
-          PKG_PATH="$(find dist_macos -maxdepth 1 -type f -name '*.pkg' | head -n 1)"
+          PKG_PATH="$(find dist_macos -type f -name '*.pkg' | head -n 1)"
           if [[ -n "${PKG_PATH:-}" ]]; then
             cp "$PKG_PATH" "$OUT_DIR/"
           fi
