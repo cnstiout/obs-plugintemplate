@@ -1,0 +1,106 @@
+name: macOS Cloud Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (example: v0.1.0)"
+        required: true
+        default: "v0.1.0"
+      publish_release:
+        description: "Publish GitHub Release"
+        required: true
+        default: true
+        type: boolean
+      draft:
+        description: "Create release as draft"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-13
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! brew list opencv >/dev/null 2>&1; then
+            brew install opencv pkg-config
+          fi
+
+      - name: Configure CMake (macOS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPENCV_DIR="$(brew --prefix opencv)/lib/cmake/opencv4"
+          cmake --preset macos \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCODESIGN_IDENTITY=- \
+            -DOpenCV_DIR="$OPENCV_DIR"
+
+      - name: Build
+        run: cmake --build --preset macos --config RelWithDebInfo --parallel
+
+      - name: Install
+        run: cmake --install build_macos --config RelWithDebInfo --prefix dist_macos
+
+      - name: Package Assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag }}"
+          SAFE_TAG="${TAG#v}"
+          OUT_DIR="release-assets"
+          mkdir -p "$OUT_DIR"
+
+          PLUGIN_PATH="$(find dist_macos -maxdepth 1 -type d -name '*.plugin' | head -n 1)"
+          if [[ -z "${PLUGIN_PATH:-}" ]]; then
+            echo "No .plugin bundle found under dist_macos"
+            find dist_macos -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          PLUGIN_NAME="$(basename "$PLUGIN_PATH")"
+          (
+            cd dist_macos
+            zip -qry "../$OUT_DIR/obs-face-emotion-filter-${SAFE_TAG}-macos-plugin.zip" "$PLUGIN_NAME"
+          )
+
+          PKG_PATH="$(find dist_macos -maxdepth 1 -type f -name '*.pkg' | head -n 1)"
+          if [[ -n "${PKG_PATH:-}" ]]; then
+            cp "$PKG_PATH" "$OUT_DIR/"
+          fi
+
+          (
+            cd "$OUT_DIR"
+            shasum -a 256 * > SHA256SUMS.txt
+          )
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release-assets
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: ${{ github.event.inputs.publish_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: OBS Face Emotion Filter ${{ github.event.inputs.tag }}
+          draft: ${{ github.event.inputs.draft }}
+          generate_release_notes: true
+          files: |
+            release-assets/*

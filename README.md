@@ -1,59 +1,98 @@
-# OBS Plugin Template
+# OBS Face Emotion Filter
 
-## Introduction
+Plugin OBS natif C++ (Windows) qui ajoute un **filtre source webcam** pour:
+- tracker jusqu'a 3 visages (rectangle),
+- afficher une emotion en francais (`Joie`, `Tristesse`, `Colere`, `Peur`, `Surprise`, `Degout`, `Neutre`, `Incertain`),
+- tourner en local/offline (aucune API cloud).
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+## Caracteristiques
+- Cible OBS: `32.x` (buildspec verrouille `32.0.2`)
+- Pipeline live: stream possible en `1080p60`, inference a `15 fps`
+- Multi-visages: jusqu'a `3`
+- Perte visage: masquage immediat
+- Lissage emotions: `0.6s` (EMA)
+- Seuil `Incertain`: `30%`
+- Logs perf toutes les 5s (latence inference + fps inference + backlog queue)
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+## Prerequis (Windows)
+- OBS Studio 32.x
+- CMake >= 3.28
+- Visual Studio Build Tools (generator configure dans `CMakePresets.json`)
+- Windows SDK >= 10.0.20348.0
+- vcpkg (pour `opencv4`)
+- Inno Setup 6 (optionnel, pour l'installeur `.exe`)
 
-## Supported Build Environments
+## Build local
+1. Configurer `VCPKG_ROOT` vers ton installation vcpkg.
+2. Configurer CMake:
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+```powershell
+cmake --preset windows-x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+```
 
-## Quick Start
+3. Compiler en Release:
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+```powershell
+cmake --build --preset windows-x64 --config Release
+```
 
-## Documentation
+4. Installer dans un dossier de distribution local:
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+```powershell
+cmake --install build_x64 --config Release --prefix dist
+```
 
-Suggested reading to get up and running:
+Resultat attendu:
+- Binaires plugin: `dist/obs-face-emotion-filter/bin/64bit/` (DLL plugin + DLL runtime OpenCV/protobuf)
+- Donnees plugin/modeles: `dist/obs-face-emotion-filter/data/...`
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
+## Installation manuelle dans OBS
+Copier:
+- `dist/obs-face-emotion-filter/bin/64bit/*` -> `C:\Program Files\obs-studio\obs-plugins\64bit\`
+- `dist/obs-face-emotion-filter/data/` -> `C:\Program Files\obs-studio\data\obs-plugins\obs-face-emotion-filter\`
 
-## GitHub Actions & CI
+Puis redemarrer OBS.
 
-Default GitHub Actions workflows are available for the following repository actions:
+## Creation de l'installeur Inno Setup
+Depuis le dossier projet:
 
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
+```powershell
+iscc installer\obs-face-emotion-filter.iss
+```
 
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
+Le script attend les artefacts dans `dist/obs-face-emotion-filter`.
 
-### Retrieving build artifacts
+## Release macOS depuis le cloud (GitHub Actions)
+Workflow disponible: `.github/workflows/release-macos-cloud.yml`
 
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
+1. Push le projet sur GitHub.
+2. Ouvre `Actions` -> `macOS Cloud Release`.
+3. `Run workflow` avec un tag (ex: `v0.1.0`).
+4. Recupere les fichiers dans:
+- l'onglet `Artifacts` du run (`macos-release-assets`),
+- ou la `Release` GitHub si `publish_release=true`.
 
-### Building a Release
+## Utilisation dans OBS
+1. Ajouter ta webcam dans une scene.
+2. Ouvrir `Filtres` sur la webcam.
+3. Ajouter `Face Emotion Filter`.
+4. Regler:
+- `Max Faces` (1..3),
+- `Inference FPS` (defaut 15),
+- `Inference Width` (defaut 640),
+- `Confidence Threshold` (defaut 0.30),
+- `Smoothing (seconds)` (defaut 0.6),
+- options d'affichage rectangle/label/score.
 
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
+## Modeles embarques
+- `data/models/face_detection_yunet_2023mar.onnx`
+- `data/models/emotion-ferplus-8.onnx`
 
-## Signing and Notarizing on macOS
+## Limites connues
+- Le filtre CPU supporte explicitement les formats d'image OBS BGRA/BGRX/RGBA/RGBX.
+- Les performances dependent fortement du CPU.
+- La qualite emotion peut varier selon eclairage, angle et resolution visage.
 
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+## Licence
+Code source sous licence MIT.  
+Dependances et modeles: voir `THIRD_PARTY_NOTICES.md`.

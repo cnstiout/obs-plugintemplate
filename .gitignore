@@ -2,11 +2,15 @@
 /*
 
 # Except for default project files
-!/.github
 !/build-aux
 !/cmake
 !/data
+!/.github
+!/.github/**
+!/installer
 !/src
+!/tools
+!/tools/**
 !.clang-format
 !.gersemirc
 !.gitignore
@@ -15,6 +19,8 @@
 !CMakePresets.json
 !LICENSE
 !README.md
+!THIRD_PARTY_NOTICES.md
+!vcpkg.json
 
 # Exclude lock files
 *.lock.json

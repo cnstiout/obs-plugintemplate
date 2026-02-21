@@ -1,0 +1,17 @@
+{
+  "name": "obs-face-emotion-filter",
+  "version-string": "0.1.0",
+  "description": "OBS source filter plugin for face tracking and emotion overlays.",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "calib3d",
+        "dnn",
+        "fs",
+        "thread"
+      ]
+    }
+  ]
+}
