@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-13
+    runs-on: macos-15
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           OPENCV_DIR="$(brew --prefix opencv)/lib/cmake/opencv4"
           cmake --preset macos \
-            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCODESIGN_IDENTITY=- \
             -DOpenCV_DIR="$OPENCV_DIR"
 
@@ -74,7 +74,7 @@ jobs:
           PLUGIN_NAME="$(basename "$PLUGIN_PATH")"
           (
             cd dist_macos
-            zip -qry "../$OUT_DIR/obs-face-emotion-filter-${SAFE_TAG}-macos-plugin.zip" "$PLUGIN_NAME"
+            zip -qry "../$OUT_DIR/obs-face-emotion-filter-${SAFE_TAG}-macos-arm64-plugin.zip" "$PLUGIN_NAME"
           )
 
           PKG_PATH="$(find dist_macos -maxdepth 1 -type f -name '*.pkg' | head -n 1)"
