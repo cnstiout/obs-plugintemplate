@@ -11,7 +11,8 @@
 
 namespace {
 
-constexpr std::size_t kMaxQueueSize = 2;
+// Keep only the latest frame to minimize overlay latency under load.
+constexpr std::size_t kMaxQueueSize = 1;
 constexpr int kEmotionInputSize = 64;
 
 cv::Rect ClampRectToFrame(const cv::Rect &rect, const int width, const int height)

@@ -289,7 +289,7 @@ void FaceEmotionFilter::Update(obs_data_t *settings)
   FilterConfig updated_config;
   updated_config.enabled = obs_data_get_bool(settings, kSettingEnabled);
   updated_config.max_faces = std::clamp(static_cast<int>(obs_data_get_int(settings, kSettingMaxFaces)), 1, 3);
-  updated_config.inference_fps = std::clamp(static_cast<int>(obs_data_get_int(settings, kSettingInferenceFps)), 1, 60);
+  updated_config.inference_fps = std::clamp(static_cast<int>(obs_data_get_int(settings, kSettingInferenceFps)), 0, 240);
   updated_config.inference_width =
     std::clamp(static_cast<int>(obs_data_get_int(settings, kSettingInferenceWidth)), 160, 1920);
   updated_config.confidence_threshold =
@@ -364,20 +364,23 @@ obs_source_frame *FaceEmotionFilter::FilterVideo(obs_source_frame *frame)
   warned_unsupported_format_ = false;
 
   const uint64_t timestamp_ns = GetTimestampNs(frame);
-  const int safe_fps = std::max(1, local_config.inference_fps);
-  const uint64_t interval_ns = kOneSecondNs / static_cast<uint64_t>(safe_fps);
+  const int configured_fps = std::max(0, local_config.inference_fps);
+  const bool unthrottled = configured_fps == 0;
+  const uint64_t interval_ns = unthrottled ? 0 : (kOneSecondNs / static_cast<uint64_t>(configured_fps));
 
   cv::Mat current_bgr_frame;
   bool have_current_bgr = false;
 
-  if (last_submitted_ts_ns_ == 0 || timestamp_ns >= last_submitted_ts_ns_ + interval_ns) {
+  if (unthrottled || last_submitted_ts_ns_ == 0 || timestamp_ns >= last_submitted_ts_ns_ + interval_ns) {
     if (ExtractBgrFrame(frame, &current_bgr_frame)) {
       worker_.SubmitFrame(
         current_bgr_frame,
         timestamp_ns,
         static_cast<int>(frame->width),
         static_cast<int>(frame->height));
-      last_submitted_ts_ns_ = timestamp_ns;
+      if (!unthrottled) {
+        last_submitted_ts_ns_ = timestamp_ns;
+      }
       have_current_bgr = true;
     }
   }
@@ -414,7 +417,7 @@ void FaceEmotionFilter::GetDefaults(obs_data_t *settings)
 {
   obs_data_set_default_bool(settings, kSettingEnabled, true);
   obs_data_set_default_int(settings, kSettingMaxFaces, 3);
-  obs_data_set_default_int(settings, kSettingInferenceFps, 15);
+  obs_data_set_default_int(settings, kSettingInferenceFps, 0);
   obs_data_set_default_int(settings, kSettingInferenceWidth, 640);
   obs_data_set_default_double(settings, kSettingConfidenceThreshold, 0.30);
   obs_data_set_default_double(settings, kSettingSmoothingSeconds, 0.6);
@@ -435,7 +438,7 @@ void FaceEmotionFilter::GetDefaults(obs_data_t *settings)
   obs_data_set_default_double(settings, kSettingTextScale, 1.15);
   obs_data_set_default_int(settings, kSettingTextThickness, 2);
   obs_data_set_default_int(settings, kSettingTextPadding, 4);
-  obs_data_set_default_int(settings, kSettingTextBgOpacity, 180);
+  obs_data_set_default_int(settings, kSettingTextBgOpacity, 0);
   obs_data_set_default_string(settings, kSettingLowConfidenceLabel, "Incertain");
 }
 
@@ -444,7 +447,7 @@ obs_properties_t *FaceEmotionFilter::GetProperties()
   obs_properties_t *props = obs_properties_create();
   obs_properties_add_bool(props, kSettingEnabled, obs_module_text("FaceEmotionFilter.Enabled"));
   obs_properties_add_int_slider(props, kSettingMaxFaces, obs_module_text("FaceEmotionFilter.MaxFaces"), 1, 3, 1);
-  obs_properties_add_int_slider(props, kSettingInferenceFps, obs_module_text("FaceEmotionFilter.InferenceFps"), 1, 60, 1);
+  obs_properties_add_int_slider(props, kSettingInferenceFps, obs_module_text("FaceEmotionFilter.InferenceFps"), 0, 240, 1);
   obs_properties_add_int_slider(
     props,
     kSettingInferenceWidth,

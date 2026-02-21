@@ -12,7 +12,7 @@
 struct FilterConfig {
   bool enabled = true;
   int max_faces = 3;
-  int inference_fps = 15;
+  int inference_fps = 0;
   int inference_width = 640;
   float confidence_threshold = 0.30f;
   float smoothing_seconds = 0.6f;
@@ -33,7 +33,7 @@ struct FilterConfig {
   float text_scale = 1.15f;
   int text_thickness = 2;
   int text_padding = 4;
-  int text_bg_opacity = 180;
+  int text_bg_opacity = 0;
   std::string low_conf_label = "Incertain";
 };
 
